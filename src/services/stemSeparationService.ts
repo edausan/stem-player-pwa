@@ -58,6 +58,12 @@ export async function separateStems(
   audioFile: File,
   onProgress?: ProgressCallback
 ): Promise<SeparatedStems> {
+  // Check if user is authenticated (required for stem separation)
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
+    throw new Error('You must be logged in to use stem separation')
+  }
+
   try {
     // Step 1: Upload/encode audio
     onProgress?.({
@@ -75,7 +81,7 @@ export async function separateStems(
     })
 
     // Step 2: Call Demucs API via Supabase Edge Function (to avoid CORS)
-    // Include the anon key in headers to ensure the request is authorized
+    // supabase.functions.invoke() automatically includes auth headers
     const { data: result, error: functionError } = await supabase.functions.invoke('separate-stems', {
       body: {
         instances: [
@@ -83,16 +89,13 @@ export async function separateStems(
             b64: base64Audio
           }
         ]
-      },
-      headers: {
-        'Content-Type': 'application/json',
       }
     })
 
     if (functionError) {
       // Provide more helpful error messages
-      if (functionError.message?.includes('401') || functionError.message?.includes('Unauthorized')) {
-        throw new Error('Edge Function authentication failed. The function may not be deployed yet. Please run: supabase functions deploy separate-stems')
+      if (functionError.message?.includes('401') || functionError.message?.includes('Unauthorized') || functionError.message?.includes('Invalid JWT')) {
+        throw new Error('Authentication failed. Please make sure you are logged in and the Edge Function is deployed. Run: supabase functions deploy separate-stems')
       }
       if (functionError.message?.includes('404') || functionError.message?.includes('not found')) {
         throw new Error('Edge Function not found. Please deploy it first: supabase functions deploy separate-stems')

@@ -115,9 +115,10 @@ export const useLibraryStore = defineStore('library', () => {
     const userId = authStore.user.id
 
     // Upload files directly to Supabase Storage
+    const uploadErrors: string[] = []
     for (const [stemName, file] of Object.entries(files)) {
       const filePath = `${userId}/songs/${id}/${stemName}`
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(filePath, file, {
           upsert: true,
@@ -125,9 +126,18 @@ export const useLibraryStore = defineStore('library', () => {
         })
 
       if (uploadError) {
-        console.error(`Error uploading ${stemName}:`, uploadError)
-        throw new Error(`Failed to upload ${stemName}: ${uploadError.message}`)
+        const errorMsg = `Error uploading ${stemName} to ${filePath}: ${uploadError.message || JSON.stringify(uploadError)}`
+        console.error(errorMsg)
+        uploadErrors.push(errorMsg)
+        // Continue uploading other files, but we'll fail at the end if any failed
+      } else {
+        console.log(`Successfully uploaded ${stemName} to ${filePath}`)
       }
+    }
+
+    // If any uploads failed, throw error
+    if (uploadErrors.length > 0) {
+      throw new Error(`Failed to upload some stems:\n${uploadErrors.join('\n')}`)
     }
 
     // Save metadata to Supabase database
@@ -358,19 +368,60 @@ export const useLibraryStore = defineStore('library', () => {
 
       // Download files from storage
       const files: Record<string, File> = {}
+      const downloadErrors: string[] = []
+      
       for (const stemName of cloudSong.stems) {
         const filePath = `${fileUserId}/songs/${songId}/${stemName}`
         const { data: fileData, error: downloadError } = await supabase.storage
           .from(STORAGE_BUCKET)
           .download(filePath)
 
-        if (downloadError || !fileData) {
-          console.error(`Error downloading ${stemName}:`, downloadError)
-          return null
+        if (downloadError) {
+          const errorMsg = `Error downloading ${stemName} from ${filePath}: ${downloadError.message || JSON.stringify(downloadError)}`
+          console.error(errorMsg)
+          downloadErrors.push(errorMsg)
+          
+          // If file doesn't exist (404), continue with other stems
+          // This handles cases where some stems might be missing
+          const errorMessage = downloadError.message || ''
+          if (errorMessage.includes('not found') || 
+              errorMessage.includes('404') ||
+              errorMessage.includes('No such file')) {
+            console.warn(`Stem ${stemName} not found in storage at path: ${filePath}`)
+            continue
+          }
+          
+          // For 400 errors, the path might be wrong or file doesn't exist
+          // Continue to try other stems
+          if (errorMessage.includes('400') || errorMessage.includes('Bad Request')) {
+            console.warn(`Bad request for ${stemName} at path: ${filePath}. File may not exist.`)
+            continue
+          }
+          
+          // For other errors (permissions, etc.), log but continue
+          console.warn(`Error downloading ${stemName}, continuing with other stems`)
+          continue
+        }
+
+        if (!fileData) {
+          console.warn(`No file data returned for ${stemName}, skipping`)
+          continue
         }
 
         // Convert blob to File
         files[stemName] = new File([fileData], `${stemName}.mp3`, { type: fileData.type || 'audio/mpeg' })
+      }
+
+      // If no files were downloaded, return null with helpful error
+      if (Object.keys(files).length === 0) {
+        console.error('No stems could be downloaded for song:', songId)
+        console.error('Download errors:', downloadErrors)
+        throw new Error(`Could not download any stems for song. Files may not exist in storage. Check that the song was uploaded correctly.`)
+      }
+      
+      // Log warning if some stems are missing
+      if (Object.keys(files).length < cloudSong.stems.length) {
+        console.warn(`Only downloaded ${Object.keys(files).length} of ${cloudSong.stems.length} stems for song ${songId}`)
       }
 
       // Convert cloud record to local format

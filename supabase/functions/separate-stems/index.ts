@@ -1,8 +1,6 @@
 // Supabase Edge Function to proxy Demucs API requests
 // This avoids CORS issues by making server-to-server requests
-
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// This file runs in Deno runtime - Deno global is available at runtime
 
 const DEMUCS_API_URL = 'https://demucs-api-hwbhnojdya-uc.a.run.app/predict'
 
@@ -11,15 +9,30 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+// @ts-expect-error - Deno is a global in Deno runtime, not available in TypeScript types
+Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Allow both authenticated and unauthenticated requests
-    // The function works for all users (authenticated or not)
+    // Basic validation: ensure request has some form of Supabase auth
+    // (anon key or user token - both are valid for this function)
+    const authHeader = req.headers.get('Authorization')
+    const apikeyHeader = req.headers.get('apikey')
+    
+    // At minimum, we should have either Authorization or apikey header
+    // supabase.functions.invoke() automatically includes these
+    if (!authHeader && !apikeyHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization. Please ensure you are logged in.' }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      )
+    }
 
     // Parse the request body
     const requestData = await req.json()

@@ -370,7 +370,7 @@ const selectedSongForEdit = ref<SongMetadata | null>(null)
 
 // Layout state with localStorage persistence
 const layout = ref<'grid' | 'stacked'>(
-  (localStorage.getItem('songLibraryLayout') as 'grid' | 'stacked') || 'grid'
+  (localStorage.getItem('songLibraryLayout') as 'grid' | 'stacked') || 'stacked'
 )
 
 // Filter state
