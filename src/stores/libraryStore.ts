@@ -222,6 +222,15 @@ export const useLibraryStore = defineStore('library', () => {
     songs.value = storage.getAllMetadata()
   }
 
+  async function clearLibrary() {
+    // Clear all songs from local storage
+    const allSongIds = songs.value.map(song => song.id)
+    for (const songId of allSongIds) {
+      await storage.deleteSong(songId)
+    }
+    songs.value = []
+  }
+
   async function addSong(
     title: string,
     files: Record<string, File>,
@@ -440,7 +449,7 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
-  async function downloadSongFromCloud(songId: string, allowPublic: boolean = false): Promise<StoredSong | null> {
+  async function downloadSongFromCloud(songId: string, allowPublic: boolean = true): Promise<StoredSong | null> {
     const authStore = useAuthStore()
     
     // For public songs, allow download even if not authenticated
@@ -605,9 +614,27 @@ export const useLibraryStore = defineStore('library', () => {
     isSyncing.value = true
 
     try {
-      const cloudSongs = await getCloudSongs()
+      // Get both user's songs and public songs
+      const [userSongs, publicSongs] = await Promise.all([
+        getCloudSongs(),
+        getPublicSongs()
+      ])
 
-      for (const cloudSong of cloudSongs) {
+      // Combine and deduplicate (user's songs take priority)
+      const allCloudSongs = new Map<string, CloudSongRecord>()
+      
+      // Add public songs first
+      for (const song of publicSongs) {
+        allCloudSongs.set(song.id, song)
+      }
+      
+      // Add/override with user's songs (includes user's own public songs)
+      for (const song of userSongs) {
+        allCloudSongs.set(song.id, song)
+      }
+
+      // Download all songs that need updating
+      for (const cloudSong of allCloudSongs.values()) {
         const localSong = songs.value.find(s => s.id === cloudSong.id)
         
         // Download if not in local or cloud is newer
@@ -617,7 +644,7 @@ export const useLibraryStore = defineStore('library', () => {
           cloudUpdated > localSong.syncedAt
 
         if (shouldDownload) {
-          await downloadSongFromCloud(cloudSong.id)
+          await downloadSongFromCloud(cloudSong.id, cloudSong.is_public)
         }
       }
 
@@ -626,6 +653,17 @@ export const useLibraryStore = defineStore('library', () => {
       console.error('Error syncing from cloud:', error)
     } finally {
       isSyncing.value = false
+    }
+  }
+
+  async function loadAllSongs(): Promise<void> {
+    // Load local songs first
+    await loadSongs()
+
+    // If authenticated and online, also load public and user songs from cloud
+    const authStore = useAuthStore()
+    if (authStore.isAuthenticated && navigator.onLine) {
+      await syncFromCloud()
     }
   }
 
@@ -677,6 +715,8 @@ export const useLibraryStore = defineStore('library', () => {
     isSyncing,
     init,
     loadSongs,
+    loadAllSongs,
+    clearLibrary,
     addSong,
     addSongWithSeparation,
     updateSong,

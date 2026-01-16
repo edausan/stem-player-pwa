@@ -202,8 +202,8 @@ function handleSongLoaded() {
 }
 
 async function handleAuthenticated() {
-  // User just authenticated, sync library
-  await libraryStore.init()
+  // User just authenticated, load all songs (public + user's)
+  await libraryStore.loadAllSongs()
   if (navigator.onLine) {
     syncService.fullSync().catch(err => {
       console.error('Sync error after auth:', err)
@@ -229,8 +229,8 @@ async function handleSync() {
 async function handleSignOut() {
   showUserMenu.value = false
   await authStore.signOut()
-  // Reload library to show local-only songs
-  await libraryStore.init()
+  // Clear library after logout
+  await libraryStore.clearLibrary()
 }
 
 onMounted(async () => {

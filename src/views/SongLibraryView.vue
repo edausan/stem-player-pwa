@@ -1,25 +1,58 @@
 <template>
   <div class="min-h-screen bg-black text-white">
     <div class="container mx-auto px-4 py-8 max-w-4xl">
-      <div class="mb-6">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
-          <h1 class="text-4xl font-bold flex-1">Song Library</h1>
-          <div class="flex items-center gap-3">
-            <!-- Upload Button -->
+      <!-- Hero Section (when not logged in) -->
+      <div v-if="!authStore.isAuthenticated" class="text-center py-20">
+        <div class="max-w-3xl mx-auto">
+          <div class="mb-8">
+            <svg class="w-32 h-32 mx-auto text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            </svg>
+          </div>
+          <h1 class="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            StemLab
+          </h1>
+          <p class="text-xl md:text-2xl text-gray-300 mb-4">
+            Upload songs and automatically separate them into stems
+          </p>
+          <p class="text-lg text-gray-400 mb-8 max-w-2xl mx-auto">
+            Create, mix, and remix music with AI-powered stem separation. Upload a single song file and get separate tracks for vocals, drums, bass, and more.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <button
-              @click="$emit('upload')"
-              class="w-full md:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center justify-center gap-2"
+              @click="$emit('show-auth')"
+              class="px-8 py-4 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center gap-2 text-lg"
             >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
               </svg>
-              Upload Song
+              Get Started
             </button>
           </div>
         </div>
+      </div>
 
-        <!-- View Options Toolbar -->
-        <div v-if="!isLoading && libraryStore.songs.length > 0" class="flex items-center justify-end gap-2 bg-gray-900 rounded-lg p-2 border border-gray-800">
+      <!-- Library Content (when logged in) -->
+      <div v-else>
+        <div class="mb-6">
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
+            <h1 class="text-4xl font-bold flex-1">Song Library</h1>
+            <div class="flex items-center gap-3">
+              <!-- Upload Button -->
+              <button
+                @click="$emit('upload')"
+                class="w-full md:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center justify-center gap-2"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Upload Song
+              </button>
+            </div>
+          </div>
+
+          <!-- View Options Toolbar -->
+          <div v-if="!isLoading && libraryStore.songs.length > 0" class="flex items-center justify-end gap-2 bg-gray-900 rounded-lg p-2 border border-gray-800">
           <span class="text-sm text-gray-400 mr-2">View:</span>
           <button
             @click="layout = 'grid'"
@@ -48,36 +81,36 @@
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
             </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty State -->
+        <div v-if="!isLoading && libraryStore.songs.length === 0" class="text-center py-16">
+          <div class="mb-6">
+            <svg class="w-24 h-24 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+            </svg>
+          </div>
+          <p class="text-xl text-gray-400 mb-4">No songs in your library yet</p>
+          <button
+            @click="$emit('upload')"
+            class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center gap-2"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Upload Your First Song
           </button>
         </div>
-      </div>
 
-      <!-- Empty State -->
-      <div v-if="!isLoading && libraryStore.songs.length === 0" class="text-center py-16">
-        <div class="mb-6">
-          <svg class="w-24 h-24 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-          </svg>
+        <!-- Loading State -->
+        <div v-else-if="isLoading" class="text-center py-16">
+          <p class="text-gray-400">Loading songs...</p>
         </div>
-        <p class="text-xl text-gray-400 mb-4">No songs in your library yet</p>
-        <button
-          @click="$emit('upload')"
-          class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center gap-2"
-        >
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-          </svg>
-          Upload Your First Song
-        </button>
-      </div>
 
-      <!-- Loading State -->
-      <div v-else-if="isLoading" class="text-center py-16">
-        <p class="text-gray-400">Loading songs...</p>
-      </div>
-
-      <!-- Song List - Grid Layout -->
-      <div v-else-if="layout === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Song List - Grid Layout -->
+        <div v-else-if="layout === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
           v-for="song in libraryStore.songs"
           :key="song.id"
@@ -89,11 +122,25 @@
               <div class="flex items-center gap-2 mb-1">
                 <h3 class="text-lg font-semibold text-white">{{ song.title }}</h3>
                 <span
-                  v-if="song.isPublic"
-                  class="px-2 py-0.5 text-xs font-medium bg-green-900/50 text-green-300 rounded border border-green-700"
-                  title="Public song"
+                  v-if="song.isPublic && song.userId !== authStore.user?.id"
+                  class="px-2 py-0.5 text-xs font-medium bg-blue-900/50 text-blue-300 rounded border border-blue-700"
+                  title="Public song from another user"
                 >
                   Public
+                </span>
+                <span
+                  v-else-if="song.isPublic && song.userId === authStore.user?.id"
+                  class="px-2 py-0.5 text-xs font-medium bg-green-900/50 text-green-300 rounded border border-green-700"
+                  title="Your public song"
+                >
+                  Your Public
+                </span>
+                <span
+                  v-else-if="authStore.isAuthenticated && song.userId === authStore.user?.id"
+                  class="px-2 py-0.5 text-xs font-medium bg-purple-900/50 text-purple-300 rounded border border-purple-700"
+                  title="Your private song"
+                >
+                  Yours
                 </span>
                 <span
                   v-else-if="authStore.isAuthenticated"
@@ -147,8 +194,8 @@
         </div>
       </div>
 
-      <!-- Song List - Stacked Layout -->
-      <div v-else class="space-y-3">
+        <!-- Song List - Stacked Layout -->
+        <div v-else class="space-y-3">
         <div
           v-for="song in libraryStore.songs"
           :key="song.id"
@@ -161,11 +208,25 @@
                 <div class="flex items-center gap-2">
                   <h3 class="text-lg font-semibold text-white truncate">{{ song.title }}</h3>
                   <span
-                    v-if="song.isPublic"
-                    class="px-2 py-0.5 text-xs font-medium bg-green-900/50 text-green-300 rounded border border-green-700 flex-shrink-0"
-                    title="Public song"
+                    v-if="song.isPublic && song.userId !== authStore.user?.id"
+                    class="px-2 py-0.5 text-xs font-medium bg-blue-900/50 text-blue-300 rounded border border-blue-700 flex-shrink-0"
+                    title="Public song from another user"
                   >
                     Public
+                  </span>
+                  <span
+                    v-else-if="song.isPublic && song.userId === authStore.user?.id"
+                    class="px-2 py-0.5 text-xs font-medium bg-green-900/50 text-green-300 rounded border border-green-700 flex-shrink-0"
+                    title="Your public song"
+                  >
+                    Your Public
+                  </span>
+                  <span
+                    v-else-if="authStore.isAuthenticated && song.userId === authStore.user?.id"
+                    class="px-2 py-0.5 text-xs font-medium bg-purple-900/50 text-purple-300 rounded border border-purple-700 flex-shrink-0"
+                    title="Your private song"
+                  >
+                    Yours
                   </span>
                   <span
                     v-else-if="authStore.isAuthenticated"
@@ -220,6 +281,7 @@
         </div>
       </div>
     </div>
+    </div>
 
     <!-- Edit Song Modal -->
     <EditSongModal
@@ -263,6 +325,21 @@ watch(layout, (newLayout) => {
 onMounted(async () => {
   if (libraryStore.songs.length === 0) {
     await libraryStore.init()
+  }
+  
+  // If user is authenticated, load all songs (public + user's)
+  if (authStore.isAuthenticated && navigator.onLine) {
+    await libraryStore.loadAllSongs()
+  }
+})
+
+// Watch for auth changes and reload songs
+watch(() => authStore.isAuthenticated, async (isAuthenticated) => {
+  if (isAuthenticated && navigator.onLine) {
+    await libraryStore.loadAllSongs()
+  } else if (!isAuthenticated) {
+    // When logged out, clear the library
+    await libraryStore.clearLibrary()
   }
 })
 
