@@ -41,6 +41,14 @@
           />
         </div>
 
+        <!-- Audio Error Message -->
+        <div
+          v-if="audioError"
+          class="mb-4 p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg"
+        >
+          <p class="text-sm text-yellow-300">{{ audioError }}</p>
+        </div>
+
         <!-- Playback Controls -->
         <div class="flex justify-center gap-4">
           <button
@@ -83,6 +91,7 @@ const libraryStore = useLibraryStore()
 
 const loadedSong = ref<StoredSong | null>(null)
 const isLoading = ref(false)
+const audioError = ref<string | null>(null)
 
 const hasStems = computed(() => {
   return Object.keys(store.engine.stems).length > 0
@@ -160,13 +169,20 @@ async function clearStems() {
   store.engine.clear()
 }
 
-function togglePlayPause() {
+async function togglePlayPause() {
+  audioError.value = null
+  
   if (store.isPlaying) {
     store.pause()
     stopUpdateLoop()
   } else {
-    store.play()
-    startUpdateLoop()
+    try {
+      await store.play()
+      startUpdateLoop()
+    } catch (error) {
+      console.error('Failed to play audio:', error)
+      audioError.value = 'Unable to play audio. Please tap the Play button again or check your device volume settings.'
+    }
   }
 }
 

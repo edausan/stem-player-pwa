@@ -16,6 +16,44 @@ export class AudioEngine {
   constructor() {
     this.master.connect(this.context.destination)
     this.updateDuration()
+    
+    // Handle mobile audio context suspension
+    this.setupMobileAudioUnlock()
+  }
+
+  // Mobile browsers require user interaction to resume AudioContext
+  private setupMobileAudioUnlock() {
+    // Try to resume context on first user interaction
+    const unlockAudio = async () => {
+      if (this.context.state === 'suspended') {
+        try {
+          await this.context.resume()
+          console.log('AudioContext resumed')
+        } catch (error) {
+          console.error('Failed to resume AudioContext:', error)
+        }
+      }
+    }
+
+    // Listen for user interactions
+    const events = ['touchstart', 'touchend', 'mousedown', 'keydown']
+    events.forEach(event => {
+      document.addEventListener(event, unlockAudio, { once: true, passive: true })
+    })
+  }
+
+  // Ensure audio context is resumed before playing
+  private async ensureAudioContextResumed(): Promise<boolean> {
+    if (this.context.state === 'suspended') {
+      try {
+        await this.context.resume()
+        return true
+      } catch (error) {
+        console.error('Failed to resume AudioContext:', error)
+        return false
+      }
+    }
+    return true
   }
 
   private updateDuration() {
@@ -51,9 +89,16 @@ export class AudioEngine {
     this.sourceNodes = []
   }
 
-  play() {
+  async play() {
     // If already playing, do nothing
     if (this.isPlaying) return
+    
+    // Ensure audio context is resumed (required for mobile browsers)
+    const resumed = await this.ensureAudioContextResumed()
+    if (!resumed) {
+      console.warn('AudioContext could not be resumed. Audio playback may not work.')
+      // Still try to play - some browsers might allow it
+    }
     
     // Stop any existing sources
     this.stopAllSources()
@@ -115,7 +160,7 @@ export class AudioEngine {
     this.playStartOffset = 0
   }
 
-  seekTo(time: number) {
+  async seekTo(time: number) {
     // Clamp time to valid range
     const seekTime = Math.max(0, Math.min(time, this.duration))
     
@@ -131,7 +176,7 @@ export class AudioEngine {
     
     // Resume playback if it was playing
     if (wasPlaying) {
-      this.play()
+      await this.play()
     }
   }
 

@@ -35,7 +35,9 @@ const formattedDuration = computed(() => store.formattedDuration)
 function onSeek(e: Event) {
   const target = e.target as HTMLInputElement
   const time = parseFloat(target.value)
-  store.seekTo(time)
+  store.seekTo(time).catch(err => {
+    console.error('Failed to seek:', err)
+  })
 }
 </script>
 

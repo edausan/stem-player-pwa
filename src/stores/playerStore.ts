@@ -35,8 +35,8 @@ export const usePlayerStore = defineStore('player', () => {
   }
   
   // Wrapper methods that update state
-  function play() {
-    engine.play()
+  async function play() {
+    await engine.play()
     updateState()
   }
   
@@ -50,8 +50,8 @@ export const usePlayerStore = defineStore('player', () => {
     updateState()
   }
   
-  function seekTo(time: number) {
-    engine.seekTo(time)
+  async function seekTo(time: number) {
+    await engine.seekTo(time)
     updateState()
   }
   
