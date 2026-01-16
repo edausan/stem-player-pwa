@@ -19,7 +19,7 @@ export interface CloudSongRecord {
   user_id: string
   title: string
   stems: string[]
-  is_public: boolean
+  is_public?: boolean // Optional in case column doesn't exist yet
   created_at: string
   updated_at: string
 }
@@ -79,7 +79,8 @@ export const useLibraryStore = defineStore('library', () => {
         id: cloudSong.id,
         title: cloudSong.title,
         stems: cloudSong.stems,
-        isPublic: cloudSong.is_public ?? false,
+        // Handle case where is_public might not exist in the record
+        isPublic: (cloudSong as any).is_public ?? false,
         createdAt: new Date(cloudSong.created_at).getTime(),
         updatedAt: new Date(cloudSong.updated_at).getTime(),
         userId: cloudSong.user_id
@@ -130,20 +131,36 @@ export const useLibraryStore = defineStore('library', () => {
     }
 
     // Save metadata to Supabase database
+    const insertData: {
+      id: string
+      user_id: string
+      title: string
+      stems: string[]
+      created_at: string
+      updated_at: string
+      is_public: boolean
+    } = {
+      id,
+      user_id: userId,
+      title,
+      stems,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_public: isPublic
+    }
+
     const { error: dbError } = await supabase
       .from('songs')
-      .insert({
-        id,
-        user_id: userId,
-        title,
-        stems,
-        is_public: isPublic,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
+      .insert(insertData)
 
     if (dbError) {
       console.error('Error saving song metadata:', dbError)
+      
+      // Provide helpful error message if column is missing
+      if (dbError.message.includes('is_public') || dbError.message.includes('schema cache') || dbError.message.includes('Could not find')) {
+        throw new Error(`Database schema error: The 'is_public' column is missing in your 'songs' table.\n\nTo fix this:\n1. Open your Supabase Dashboard\n2. Go to SQL Editor\n3. Run the migration script: ADD_IS_PUBLIC_COLUMN.sql\n\nOr run this SQL directly:\nALTER TABLE songs ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE NOT NULL;`)
+      }
+      
       throw new Error(`Failed to save song: ${dbError.message}`)
     }
 
@@ -224,6 +241,12 @@ export const useLibraryStore = defineStore('library', () => {
 
     if (dbError) {
       console.error('Error updating song:', dbError)
+      
+      // Provide helpful error message if column is missing
+      if (dbError.message.includes('is_public') || dbError.message.includes('schema cache')) {
+        throw new Error(`Database schema error: The 'is_public' column is missing. Please run the migration script ADD_IS_PUBLIC_COLUMN.sql in your Supabase SQL Editor.`)
+      }
+      
       throw new Error(`Failed to update song: ${dbError.message}`)
     }
 
@@ -355,7 +378,8 @@ export const useLibraryStore = defineStore('library', () => {
         id: cloudSong.id,
         title: cloudSong.title,
         stems: cloudSong.stems,
-        isPublic: cloudSong.is_public ?? false,
+        // Handle case where is_public might not exist in the record
+        isPublic: (cloudSong as any).is_public ?? false,
         createdAt: new Date(cloudSong.created_at).getTime(),
         updatedAt: new Date(cloudSong.updated_at).getTime(),
         userId: cloudSong.user_id,
@@ -396,6 +420,7 @@ export const useLibraryStore = defineStore('library', () => {
 
   async function getPublicSongs(): Promise<CloudSongRecord[]> {
     try {
+      // Try to fetch public songs, but handle gracefully if column doesn't exist
       const { data, error } = await supabase
         .from('songs')
         .select('*')
@@ -404,6 +429,11 @@ export const useLibraryStore = defineStore('library', () => {
         .limit(100) // Limit to prevent abuse
 
       if (error) {
+        // If column doesn't exist, return empty array (no public songs yet)
+        if (error.message.includes('is_public') || error.message.includes('schema cache')) {
+          console.warn('is_public column not found, returning empty public songs list. Run ADD_IS_PUBLIC_COLUMN.sql migration.')
+          return []
+        }
         console.error('Error fetching public songs:', error)
         return []
       }
