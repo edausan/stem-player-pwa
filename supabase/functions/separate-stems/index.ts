@@ -18,33 +18,8 @@ serve(async (req) => {
   }
 
   try {
-    // Optional: Verify authentication
-    // Uncomment the following block if you want to require authentication
-    /*
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        global: {
-          headers: { Authorization: req.headers.get('Authorization') ?? '' },
-        },
-      }
-    )
-
-    const {
-      data: { user },
-    } = await supabaseClient.auth.getUser()
-
-    if (!user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      )
-    }
-    */
+    // Allow both authenticated and unauthenticated requests
+    // The function works for all users (authenticated or not)
 
     // Parse the request body
     const requestData = await req.json()

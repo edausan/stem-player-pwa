@@ -75,6 +75,7 @@ export async function separateStems(
     })
 
     // Step 2: Call Demucs API via Supabase Edge Function (to avoid CORS)
+    // Include the anon key in headers to ensure the request is authorized
     const { data: result, error: functionError } = await supabase.functions.invoke('separate-stems', {
       body: {
         instances: [
@@ -82,10 +83,20 @@ export async function separateStems(
             b64: base64Audio
           }
         ]
+      },
+      headers: {
+        'Content-Type': 'application/json',
       }
     })
 
     if (functionError) {
+      // Provide more helpful error messages
+      if (functionError.message?.includes('401') || functionError.message?.includes('Unauthorized')) {
+        throw new Error('Edge Function authentication failed. The function may not be deployed yet. Please run: supabase functions deploy separate-stems')
+      }
+      if (functionError.message?.includes('404') || functionError.message?.includes('not found')) {
+        throw new Error('Edge Function not found. Please deploy it first: supabase functions deploy separate-stems')
+      }
       throw new Error(`Stem separation error: ${functionError.message || 'Unknown error'}`)
     }
 
