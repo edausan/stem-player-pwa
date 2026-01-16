@@ -9,6 +9,7 @@ export const usePlayerStore = defineStore('player', () => {
   const currentTime = ref(0)
   const duration = ref(0)
   const isPlaying = ref(false)
+  const songTitle = ref('')
   
   // Computed formatted time display (MM:SS)
   const formattedCurrentTime = computed(() => {
@@ -57,17 +58,23 @@ export const usePlayerStore = defineStore('player', () => {
     return time
   }
   
+  function setSongTitle(title: string) {
+    songTitle.value = title
+  }
+  
   return { 
     engine, 
     currentTime, 
     duration, 
     isPlaying,
+    songTitle,
     formattedCurrentTime,
     formattedDuration,
     play,
     pause,
     seekTo,
     updateTime,
-    updateState
+    updateState,
+    setSongTitle
   }
 })

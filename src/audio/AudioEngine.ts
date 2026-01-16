@@ -1,7 +1,7 @@
 export class AudioEngine {
   context = new AudioContext()
   master = this.context.createGain()
-  stems: Record<string, { buffer: AudioBuffer, gain: GainNode }> = {}
+  stems: Record<string, { buffer: AudioBuffer, gain: GainNode, volume: number, isMuted: boolean }> = {}
   
   // Playback state
   isPlaying = false
@@ -9,6 +9,9 @@ export class AudioEngine {
   playStartOffset: number = 0 // Audio position when playback started (for seeking)
   duration: number = 0
   sourceNodes: AudioBufferSourceNode[] = []
+  
+  // Solo state
+  soloedStem: string | null = null
 
   constructor() {
     this.master.connect(this.context.destination)
@@ -24,7 +27,8 @@ export class AudioEngine {
     const buffer = await this.context.decodeAudioData(await file.arrayBuffer())
     const gain = this.context.createGain()
     gain.connect(this.master)
-    this.stems[name] = { buffer, gain }
+    this.stems[name] = { buffer, gain, volume: 1, isMuted: false }
+    gain.gain.setValueAtTime(1, this.context.currentTime)
     this.updateDuration()
   }
 
@@ -127,6 +131,97 @@ export class AudioEngine {
   }
 
   setVolume(name: string, vol: number) {
-    this.stems[name]?.gain.gain.setValueAtTime(vol, this.context.currentTime)
+    const stem = this.stems[name]
+    if (!stem) return
+    
+    stem.volume = vol
+    this.updateStemGain(name)
+  }
+
+  setMute(name: string, muted: boolean) {
+    const stem = this.stems[name]
+    if (!stem) return
+    
+    stem.isMuted = muted
+    this.updateStemGain(name)
+  }
+
+  setSolo(name: string) {
+    // If clicking the same solo button, unsolo it
+    if (this.soloedStem === name) {
+      this.clearSolo()
+      return
+    }
+
+    this.soloedStem = name
+    this.updateAllGains()
+  }
+
+  clearSolo() {
+    this.soloedStem = null
+    this.updateAllGains()
+  }
+
+  private updateStemGain(name: string) {
+    const stem = this.stems[name]
+    if (!stem) return
+
+    let effectiveVolume = stem.volume
+
+    // Apply solo logic
+    if (this.soloedStem !== null) {
+      if (this.soloedStem === name) {
+        // This stem is soloed, play at normal volume (unless muted)
+        effectiveVolume = stem.isMuted ? 0 : stem.volume
+      } else {
+        // Other stem is soloed, mute this one
+        effectiveVolume = 0
+      }
+    } else {
+      // No solo active, apply mute
+      effectiveVolume = stem.isMuted ? 0 : stem.volume
+    }
+
+    stem.gain.gain.setValueAtTime(effectiveVolume, this.context.currentTime)
+  }
+
+  private updateAllGains() {
+    Object.keys(this.stems).forEach(name => {
+      this.updateStemGain(name)
+    })
+  }
+
+  getVolume(name: string): number {
+    return this.stems[name]?.volume ?? 0
+  }
+
+  isMuted(name: string): boolean {
+    return this.stems[name]?.isMuted ?? false
+  }
+
+  isSoloed(name: string): boolean {
+    return this.soloedStem === name
+  }
+
+  clear() {
+    // Stop playback
+    if (this.isPlaying) {
+      this.pause()
+    }
+
+    // Disconnect all gain nodes
+    Object.values(this.stems).forEach(stem => {
+      try {
+        stem.gain.disconnect()
+      } catch (e) {
+        // Already disconnected
+      }
+    })
+
+    // Clear stems
+    this.stems = {}
+    this.soloedStem = null
+    this.duration = 0
+    this.playStartOffset = 0
   }
 }

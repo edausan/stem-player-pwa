@@ -4,18 +4,36 @@
       <label class="text-sm font-semibold text-gray-300 uppercase tracking-wide">
         {{ name }}
       </label>
-      <button
-        @click="mute"
-        class="px-3 py-1 text-xs font-medium bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors"
-      >
-        Mute
-      </button>
+      <div class="flex items-center gap-2">
+        <button
+          @click="toggleSolo"
+          :class="[
+            'px-3 py-1 text-xs font-medium rounded transition-colors',
+            isSoloed
+              ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
+              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+          ]"
+        >
+          Solo
+        </button>
+        <button
+          @click="toggleMute"
+          :class="[
+            'px-3 py-1 text-xs font-medium rounded transition-colors',
+            isMuted
+              ? 'bg-red-600 hover:bg-red-500 text-white'
+              : 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+          ]"
+        >
+          Mute
+        </button>
+      </div>
     </div>
     <div class="flex items-center gap-3">
       <span class="text-xs text-gray-500 font-mono min-w-[3rem]">0%</span>
       <input
         type="range"
-        :value="volume"
+        :value="currentVolume"
         min="0"
         max="1"
         step="0.01"
@@ -30,26 +48,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { usePlayerStore } from '../stores/playerStore'
 
 const props = defineProps<{ name: string }>()
 const store = usePlayerStore()
-const volume = ref(1)
+
+const currentVolume = computed(() => store.engine.getVolume(props.name))
+const isMuted = computed(() => store.engine.isMuted(props.name))
+const isSoloed = computed(() => store.engine.isSoloed(props.name))
 
 const volumePercent = computed(() => {
-  return Math.round(volume.value * 100)
+  return Math.round(currentVolume.value * 100)
 })
 
 function onVolume(e: Event) {
   const value = Number((e.target as HTMLInputElement).value)
-  volume.value = value
   store.engine.setVolume(props.name, value)
 }
 
-function mute() {
-  volume.value = 0
-  store.engine.setVolume(props.name, 0)
+function toggleMute() {
+  const newMutedState = !isMuted.value
+  store.engine.setMute(props.name, newMutedState)
+}
+
+function toggleSolo() {
+  store.engine.setSolo(props.name)
 }
 </script>
 
