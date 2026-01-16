@@ -1,11 +1,28 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { supabase } from '../lib/supabase'
+import { useAuthStore } from './authStore'
+import { syncService } from '../services/syncService'
 
 export interface SongMetadata {
   id: string
   title: string
   stems: string[] // List of stem names (drums, bass, vocals, etc.)
+  isPublic: boolean // Whether the song is public or private
   createdAt: number
+  updatedAt?: number
+  syncedAt?: number // When last synced to cloud
+  userId?: string // User ID if synced to cloud
+}
+
+export interface CloudSongRecord {
+  id: string
+  user_id: string
+  title: string
+  stems: string[]
+  is_public: boolean
+  created_at: string
+  updated_at: string
 }
 
 export interface StoredSong extends SongMetadata {
@@ -56,7 +73,12 @@ class SongLibraryStorage {
     const data = localStorage.getItem(this.metadataKey)
     if (!data) return []
     try {
-      return JSON.parse(data)
+      const metadata = JSON.parse(data)
+      // Ensure backward compatibility: add isPublic field if missing
+      return metadata.map((song: SongMetadata) => ({
+        ...song,
+        isPublic: song.isPublic ?? false
+      }))
     } catch {
       return []
     }
@@ -166,12 +188,28 @@ export const useLibraryStore = defineStore('library', () => {
   const storage = new SongLibraryStorage()
   const songs = ref<SongMetadata[]>([])
   const isLoading = ref(false)
+  const isSyncing = ref(false)
+
+  // Cloud storage bucket name
+  const STORAGE_BUCKET = 'songs'
 
   async function init() {
     isLoading.value = true
     try {
       await storage.init()
       await loadSongs()
+
+      // Load sync queue
+      syncService.loadQueue()
+
+      // If authenticated and online, sync from cloud
+      const authStore = useAuthStore()
+      if (authStore.isAuthenticated && navigator.onLine) {
+        // Background sync (non-blocking)
+        syncService.fullSync().catch(err => {
+          console.error('Initial sync error:', err)
+        })
+      }
     } catch (error) {
       console.error('Failed to initialize library storage:', error)
     } finally {
@@ -185,7 +223,8 @@ export const useLibraryStore = defineStore('library', () => {
 
   async function addSong(
     title: string,
-    files: Record<string, File>
+    files: Record<string, File>,
+    isPublic: boolean = false
   ): Promise<string> {
     const id = `song_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const stems = Object.keys(files)
@@ -194,32 +233,69 @@ export const useLibraryStore = defineStore('library', () => {
       id,
       title,
       stems,
-      createdAt: Date.now()
+      isPublic,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     }
 
-    // Save files to IndexedDB
+    // Always save locally first (offline-first)
     await storage.saveSongFiles(id, files)
-    
-    // Save metadata
     await storage.saveMetadata(song)
     
     // Reload songs list
     await loadSongs()
 
+    // Queue for cloud sync if authenticated and online
+    const authStore = useAuthStore()
+    if (authStore.isAuthenticated && navigator.onLine) {
+      syncService.queueOperation('upload', id)
+      // Try immediate sync (non-blocking)
+      syncService.processQueue().catch(err => {
+        console.error('Background sync error:', err)
+      })
+    } else if (authStore.isAuthenticated) {
+      // Queue for later when online
+      syncService.queueOperation('upload', id)
+    }
+
     return id
   }
 
   async function deleteSong(id: string) {
+    // Always delete locally first (offline-first)
     await storage.deleteSong(id)
     await loadSongs()
+
+    // Queue cloud deletion if authenticated
+    const authStore = useAuthStore()
+    if (authStore.isAuthenticated) {
+      syncService.queueOperation('delete', id)
+      // Try immediate sync if online (non-blocking)
+      if (navigator.onLine) {
+        syncService.processQueue().catch(err => {
+          console.error('Background sync error:', err)
+        })
+      }
+    }
   }
 
   async function getSong(id: string): Promise<StoredSong | null> {
-    const metadata = songs.value.find(s => s.id === id)
-    if (!metadata) return null
+    // First try local
+    let metadata = songs.value.find(s => s.id === id)
+    let files = await storage.loadSongFiles(id)
 
-    const files = await storage.loadSongFiles(id)
-    if (!files) return null
+    // If not found locally and user is authenticated, try cloud
+    if (!metadata || !files) {
+      const authStore = useAuthStore()
+      if (authStore.isAuthenticated && navigator.onLine) {
+        const cloudSong = await downloadSongFromCloud(id)
+        if (cloudSong) {
+          return cloudSong
+        }
+      }
+    }
+
+    if (!metadata || !files) return null
 
     return {
       ...metadata,
@@ -227,13 +303,321 @@ export const useLibraryStore = defineStore('library', () => {
     }
   }
 
+  // Cloud methods
+  async function uploadSongToCloud(songId: string): Promise<boolean> {
+    const authStore = useAuthStore()
+    if (!authStore.user) {
+      console.warn('Cannot upload to cloud: User not authenticated')
+      return false
+    }
+
+    try {
+      // Get song from local storage
+      const song = await storage.getSong(songId)
+      if (!song) {
+        console.error('Song not found locally:', songId)
+        return false
+      }
+
+      const userId = authStore.user.id
+
+      // Upload files to Supabase Storage
+      for (const [stemName, file] of Object.entries(song.files)) {
+        const filePath = `${userId}/songs/${songId}/${stemName}`
+        const { error: uploadError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(filePath, file, {
+            upsert: true,
+            contentType: file.type
+          })
+
+        if (uploadError) {
+          console.error(`Error uploading ${stemName}:`, uploadError)
+          return false
+        }
+      }
+
+      // Save metadata to Supabase database
+      const { error: dbError } = await supabase
+        .from('songs')
+        .upsert({
+          id: songId,
+          user_id: userId,
+          title: song.title,
+          stems: song.stems,
+          is_public: song.isPublic ?? false,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'id'
+        })
+
+      if (dbError) {
+        console.error('Error saving song metadata:', dbError)
+        return false
+      }
+
+      // Update local metadata with sync info
+      const updatedSong: SongMetadata = {
+        ...song,
+        syncedAt: Date.now(),
+        userId,
+        updatedAt: Date.now()
+      }
+      await storage.saveMetadata(updatedSong)
+
+      return true
+    } catch (error) {
+      console.error('Error uploading song to cloud:', error)
+      return false
+    }
+  }
+
+  async function downloadSongFromCloud(songId: string, allowPublic: boolean = false): Promise<StoredSong | null> {
+    const authStore = useAuthStore()
+    
+    // For public songs, allow download even if not authenticated
+    if (!authStore.user && !allowPublic) {
+      return null
+    }
+
+    try {
+      const userId = authStore.user?.id
+
+      // Build query - if allowPublic, check for public songs or user's own songs
+      let query = supabase
+        .from('songs')
+        .select('*')
+        .eq('id', songId)
+
+      if (allowPublic && !userId) {
+        // Guest user can only access public songs
+        query = query.eq('is_public', true)
+      } else if (userId) {
+        // Authenticated user can access their own songs or public songs
+        // RLS policy will handle this, so we just query by ID
+        // The policy allows: user_id = auth.uid() OR is_public = TRUE
+      }
+
+      const { data: cloudSong, error: dbError } = await query.single()
+
+      if (dbError || !cloudSong) {
+        console.error('Song not found in cloud:', dbError)
+        return null
+      }
+
+      // For public songs downloaded by guest users, use the song's owner ID
+      const fileUserId = userId || cloudSong.user_id
+
+      // Download files from storage
+      const files: Record<string, File> = {}
+      for (const stemName of cloudSong.stems) {
+        const filePath = `${fileUserId}/songs/${songId}/${stemName}`
+        const { data: fileData, error: downloadError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .download(filePath)
+
+        if (downloadError || !fileData) {
+          console.error(`Error downloading ${stemName}:`, downloadError)
+          return null
+        }
+
+        // Convert blob to File
+        files[stemName] = new File([fileData], `${stemName}.mp3`, { type: fileData.type || 'audio/mpeg' })
+      }
+
+      // Convert cloud record to local format
+      const song: StoredSong = {
+        id: cloudSong.id,
+        title: cloudSong.title,
+        stems: cloudSong.stems,
+        isPublic: cloudSong.is_public ?? false,
+        createdAt: new Date(cloudSong.created_at).getTime(),
+        updatedAt: new Date(cloudSong.updated_at).getTime(),
+        syncedAt: Date.now(),
+        userId: cloudSong.user_id,
+        files
+      }
+
+      // For public songs downloaded by guests, mark as synced but don't set userId
+      if (!userId && cloudSong.is_public) {
+        song.userId = undefined
+      }
+
+      // Cache locally
+      await storage.saveSongFiles(song.id, files)
+      await storage.saveMetadata(song)
+
+      return song
+    } catch (error) {
+      console.error('Error downloading song from cloud:', error)
+      return null
+    }
+  }
+
+  async function getCloudSongs(): Promise<CloudSongRecord[]> {
+    const authStore = useAuthStore()
+    if (!authStore.user) {
+      return []
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('songs')
+        .select('*')
+        .eq('user_id', authStore.user.id)
+        .order('updated_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching cloud songs:', error)
+        return []
+      }
+
+      return data || []
+    } catch (error) {
+      console.error('Error fetching cloud songs:', error)
+      return []
+    }
+  }
+
+  async function getPublicSongs(): Promise<CloudSongRecord[]> {
+    try {
+      const { data, error } = await supabase
+        .from('songs')
+        .select('*')
+        .eq('is_public', true)
+        .order('updated_at', { ascending: false })
+        .limit(100) // Limit to prevent abuse
+
+      if (error) {
+        console.error('Error fetching public songs:', error)
+        return []
+      }
+
+      return data || []
+    } catch (error) {
+      console.error('Error fetching public songs:', error)
+      return []
+    }
+  }
+
+  async function syncToCloud(): Promise<void> {
+    const authStore = useAuthStore()
+    if (!authStore.isAuthenticated || !navigator.onLine) {
+      return
+    }
+
+    isSyncing.value = true
+
+    try {
+      // Upload all local songs that aren't synced or need updating
+      for (const song of songs.value) {
+        // Check if needs sync (no syncedAt or local updatedAt > syncedAt)
+        const needsSync = !song.syncedAt || 
+          (song.updatedAt && song.syncedAt && song.updatedAt > song.syncedAt)
+
+        if (needsSync) {
+          await uploadSongToCloud(song.id)
+        }
+      }
+
+      await loadSongs()
+    } catch (error) {
+      console.error('Error syncing to cloud:', error)
+    } finally {
+      isSyncing.value = false
+    }
+  }
+
+  async function syncFromCloud(): Promise<void> {
+    const authStore = useAuthStore()
+    if (!authStore.isAuthenticated || !navigator.onLine) {
+      return
+    }
+
+    isSyncing.value = true
+
+    try {
+      const cloudSongs = await getCloudSongs()
+
+      for (const cloudSong of cloudSongs) {
+        const localSong = songs.value.find(s => s.id === cloudSong.id)
+        
+        // Download if not in local or cloud is newer
+        const cloudUpdated = new Date(cloudSong.updated_at).getTime()
+        const shouldDownload = !localSong || 
+          !localSong.syncedAt || 
+          cloudUpdated > localSong.syncedAt
+
+        if (shouldDownload) {
+          await downloadSongFromCloud(cloudSong.id)
+        }
+      }
+
+      await loadSongs()
+    } catch (error) {
+      console.error('Error syncing from cloud:', error)
+    } finally {
+      isSyncing.value = false
+    }
+  }
+
+  async function deleteSongFromCloud(songId: string): Promise<boolean> {
+    const authStore = useAuthStore()
+    if (!authStore.user) {
+      return false
+    }
+
+    try {
+      const userId = authStore.user.id
+
+      // Get song to know which files to delete
+      const song = songs.value.find(s => s.id === songId)
+      if (song) {
+        // Delete files from storage
+        const filePaths = song.stems.map(stem => `${userId}/songs/${songId}/${stem}`)
+        const { error: deleteError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .remove(filePaths)
+
+        if (deleteError) {
+          console.error('Error deleting files from storage:', deleteError)
+        }
+      }
+
+      // Delete metadata from database
+      const { error: dbError } = await supabase
+        .from('songs')
+        .delete()
+        .eq('id', songId)
+        .eq('user_id', userId)
+
+      if (dbError) {
+        console.error('Error deleting song from database:', dbError)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error deleting song from cloud:', error)
+      return false
+    }
+  }
+
   return {
     songs,
     isLoading,
+    isSyncing,
     init,
     loadSongs,
     addSong,
     deleteSong,
-    getSong
+    getSong,
+    uploadSongToCloud,
+    downloadSongFromCloud,
+    getCloudSongs,
+    getPublicSongs,
+    syncToCloud,
+    syncFromCloud,
+    deleteSongFromCloud
   }
 })

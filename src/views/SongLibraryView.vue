@@ -2,17 +2,20 @@
   <div class="min-h-screen bg-black text-white">
     <div class="container mx-auto px-4 py-8 max-w-4xl">
       <div class="mb-6">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
           <h1 class="text-4xl font-bold flex-1">Song Library</h1>
-          <button
-            @click="$emit('upload')"
-            class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center gap-2"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            Upload Song
-          </button>
+          <div class="flex items-center gap-3">
+            <!-- Upload Button -->
+            <button
+              @click="$emit('upload')"
+              class="w-full md:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center justify-center gap-2"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Upload Song
+            </button>
+          </div>
         </div>
 
         <!-- View Options Toolbar -->
@@ -82,8 +85,27 @@
           class="bg-gray-900 rounded-lg p-6 border border-gray-800 hover:border-purple-600 hover:bg-gray-800 cursor-pointer transition-all duration-200"
         >
           <div class="flex items-start justify-between mb-4">
-            <h3 class="text-lg font-semibold text-white flex-1 pr-2">{{ song.title }}</h3>
+            <div class="flex-1 pr-2">
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="text-lg font-semibold text-white">{{ song.title }}</h3>
+                <span
+                  v-if="song.isPublic"
+                  class="px-2 py-0.5 text-xs font-medium bg-green-900/50 text-green-300 rounded border border-green-700"
+                  title="Public song"
+                >
+                  Public
+                </span>
+                <span
+                  v-else-if="authStore.isAuthenticated"
+                  class="px-2 py-0.5 text-xs font-medium bg-gray-700 text-gray-300 rounded border border-gray-600"
+                  title="Private song"
+                >
+                  Private
+                </span>
+              </div>
+            </div>
             <button
+              v-if="authStore.isAuthenticated && (song.userId === authStore.user?.id || !song.userId)"
               @click.stop="deleteSong(song.id)"
               class="text-gray-500 hover:text-red-500 transition-colors p-1"
               title="Delete song"
@@ -123,8 +145,27 @@
         >
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between mb-2">
-              <h3 class="text-lg font-semibold text-white pr-2 truncate">{{ song.title }}</h3>
+              <div class="flex-1 pr-2 min-w-0">
+                <div class="flex items-center gap-2">
+                  <h3 class="text-lg font-semibold text-white truncate">{{ song.title }}</h3>
+                  <span
+                    v-if="song.isPublic"
+                    class="px-2 py-0.5 text-xs font-medium bg-green-900/50 text-green-300 rounded border border-green-700 flex-shrink-0"
+                    title="Public song"
+                  >
+                    Public
+                  </span>
+                  <span
+                    v-else-if="authStore.isAuthenticated"
+                    class="px-2 py-0.5 text-xs font-medium bg-gray-700 text-gray-300 rounded border border-gray-600 flex-shrink-0"
+                    title="Private song"
+                  >
+                    Private
+                  </span>
+                </div>
+              </div>
               <button
+                v-if="authStore.isAuthenticated && (song.userId === authStore.user?.id || !song.userId)"
                 @click.stop="deleteSong(song.id)"
                 class="text-gray-500 hover:text-red-500 transition-colors p-1 flex-shrink-0"
                 title="Delete song"
@@ -161,15 +202,16 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useLibraryStore } from '../stores/libraryStore'
-import { usePlayerStore } from '../stores/playerStore'
+import { useAuthStore } from '../stores/authStore'
 
 const emit = defineEmits<{
   upload: []
   select: [songId: string]
+  'show-auth': []
 }>()
 
 const libraryStore = useLibraryStore()
-const playerStore = usePlayerStore()
+const authStore = useAuthStore()
 const isLoading = libraryStore.isLoading
 
 // Layout state with localStorage persistence

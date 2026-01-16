@@ -24,7 +24,7 @@
           <h1 class="text-4xl font-bold mb-2 text-purple-400">
             {{ loadedSong.title }}
           </h1>
-          <p class="text-gray-400 text-sm">Stem Player</p>
+          <p class="text-gray-400 text-sm">StemLab</p>
         </div>
 
         <!-- Seekbar -->

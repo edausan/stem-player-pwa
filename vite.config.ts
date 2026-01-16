@@ -8,8 +8,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       manifest: {
-        name: 'Stem Player',
-        short_name: 'StemPlayer',
+        name: 'StemLab',
+        short_name: 'StemLab',
         theme_color: '#111',
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },

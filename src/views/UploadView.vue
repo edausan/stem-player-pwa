@@ -3,6 +3,16 @@
     <div class="container mx-auto px-4 py-8 max-w-4xl">
       <h1 class="text-4xl font-bold mb-8 text-center">Upload Song</h1>
 
+      <!-- Auth Notice -->
+      <div
+        v-if="!authStore.isAuthenticated"
+        class="mb-6 p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg"
+      >
+        <p class="text-sm text-yellow-300">
+          <strong>Note:</strong> You're not signed in. Songs will be saved locally and can be synced to the cloud after you sign in.
+        </p>
+      </div>
+
       <form @submit.prevent="handleSubmit" class="space-y-6">
         <!-- Song Title Input -->
         <div>
@@ -16,6 +26,39 @@
             placeholder="Enter song title..."
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-transparent"
           />
+        </div>
+
+        <!-- Visibility Toggle -->
+        <div v-if="authStore.isAuthenticated" class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+          <label class="block text-sm font-medium text-gray-300 mb-3">
+            Visibility
+          </label>
+          <div class="flex gap-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                v-model="isPublic"
+                type="radio"
+                :value="false"
+                class="w-4 h-4 text-purple-600 bg-gray-800 border-gray-600 focus:ring-purple-500"
+              />
+              <div>
+                <span class="text-sm font-medium text-gray-300">Private</span>
+                <p class="text-xs text-gray-500">Only visible to you</p>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                v-model="isPublic"
+                type="radio"
+                :value="true"
+                class="w-4 h-4 text-purple-600 bg-gray-800 border-gray-600 focus:ring-purple-500"
+              />
+              <div>
+                <span class="text-sm font-medium text-gray-300">Public</span>
+                <p class="text-xs text-gray-500">Visible to everyone</p>
+              </div>
+            </label>
+          </div>
         </div>
 
         <!-- Stem Upload Sections -->
@@ -87,6 +130,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useLibraryStore } from '../stores/libraryStore'
+import { useAuthStore } from '../stores/authStore'
 
 const emit = defineEmits<{
   cancel: []
@@ -94,9 +138,11 @@ const emit = defineEmits<{
 }>()
 
 const libraryStore = useLibraryStore()
+const authStore = useAuthStore()
 const songTitle = ref('')
 const files = ref<Record<string, File>>({})
 const isUploading = ref(false)
+const isPublic = ref(false)
 
 const requiredStems = ['drums', 'bass', 'vocals', 'others']
 const optionalStems = ['guitars', 'keys']
@@ -145,12 +191,14 @@ async function handleSubmit() {
 
     const songId = await libraryStore.addSong(
       songTitle.value.trim(),
-      filesToUpload
+      filesToUpload,
+      isPublic.value
     )
 
     // Reset form
     songTitle.value = ''
     files.value = {}
+    isPublic.value = false
 
     emit('uploaded', songId)
   } catch (error) {
