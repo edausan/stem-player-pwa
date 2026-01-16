@@ -33,7 +33,7 @@
         </div>
 
         <!-- Stem Controls -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <div class="space-y-4 mb-8">
           <StemControl
             v-for="stem in loadedSong.stems"
             :key="stem"
@@ -44,18 +44,18 @@
         <!-- Playback Controls -->
         <div class="flex justify-center gap-4">
           <button
-            @click="play"
+            @click="togglePlayPause"
             :disabled="!hasStems"
             class="px-8 py-3 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 text-white font-semibold rounded-lg transition-colors duration-200"
           >
-            Play
+            {{ store.isPlaying ? 'Pause' : 'Play' }}
           </button>
           <button
-            @click="pause"
-            :disabled="!hasStems || !store.isPlaying"
-            class="px-8 py-3 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 text-white font-semibold rounded-lg transition-colors duration-200"
+            @click="stop"
+            :disabled="!hasStems"
+            class="px-8 py-3 bg-red-600 hover:bg-red-500 disabled:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50 text-white font-semibold rounded-lg transition-colors duration-200"
           >
-            Pause
+            Stop
           </button>
         </div>
       </div>
@@ -160,13 +160,18 @@ async function clearStems() {
   store.engine.clear()
 }
 
-function play() {
-  store.play()
-  startUpdateLoop()
+function togglePlayPause() {
+  if (store.isPlaying) {
+    store.pause()
+    stopUpdateLoop()
+  } else {
+    store.play()
+    startUpdateLoop()
+  }
 }
 
-function pause() {
-  store.pause()
+function stop() {
+  store.stop()
   stopUpdateLoop()
 }
 

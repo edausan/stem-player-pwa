@@ -104,6 +104,17 @@ export class AudioEngine {
     this.isPlaying = false
   }
 
+  stop() {
+    // Stop playback
+    if (this.isPlaying) {
+      this.stopAllSources()
+      this.isPlaying = false
+    }
+    
+    // Reset to beginning
+    this.playStartOffset = 0
+  }
+
   seekTo(time: number) {
     // Clamp time to valid range
     const seekTime = Math.max(0, Math.min(time, this.duration))

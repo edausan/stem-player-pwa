@@ -45,6 +45,11 @@ export const usePlayerStore = defineStore('player', () => {
     updateState()
   }
   
+  function stop() {
+    engine.stop()
+    updateState()
+  }
+  
   function seekTo(time: number) {
     engine.seekTo(time)
     updateState()
@@ -72,6 +77,7 @@ export const usePlayerStore = defineStore('player', () => {
     formattedDuration,
     play,
     pause,
+    stop,
     seekTo,
     updateTime,
     updateState,

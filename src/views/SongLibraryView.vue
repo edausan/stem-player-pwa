@@ -1,7 +1,53 @@
 <template>
   <div class="min-h-screen bg-black text-white">
     <div class="container mx-auto px-4 py-8 max-w-4xl">
-      <h1 class="text-4xl font-bold mb-8 text-center">Song Library</h1>
+      <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h1 class="text-4xl font-bold flex-1">Song Library</h1>
+          <button
+            @click="$emit('upload')"
+            class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center gap-2"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Upload Song
+          </button>
+        </div>
+
+        <!-- View Options Toolbar -->
+        <div v-if="!isLoading && libraryStore.songs.length > 0" class="flex items-center justify-end gap-2 bg-gray-900 rounded-lg p-2 border border-gray-800">
+          <span class="text-sm text-gray-400 mr-2">View:</span>
+          <button
+            @click="layout = 'grid'"
+            :class="[
+              'px-3 py-2 rounded transition-colors duration-200',
+              layout === 'grid'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            ]"
+            title="Grid view"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+          </button>
+          <button
+            @click="layout = 'stacked'"
+            :class="[
+              'px-3 py-2 rounded transition-colors duration-200',
+              layout === 'stacked'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            ]"
+            title="Stacked view"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <!-- Empty State -->
       <div v-if="!isLoading && libraryStore.songs.length === 0" class="text-center py-16">
@@ -27,8 +73,8 @@
         <p class="text-gray-400">Loading songs...</p>
       </div>
 
-      <!-- Song List -->
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <!-- Song List - Grid Layout -->
+      <div v-else-if="layout === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
           v-for="song in libraryStore.songs"
           :key="song.id"
@@ -66,12 +112,54 @@
           </div>
         </div>
       </div>
+
+      <!-- Song List - Stacked Layout -->
+      <div v-else class="space-y-3">
+        <div
+          v-for="song in libraryStore.songs"
+          :key="song.id"
+          @click="selectSong(song.id)"
+          class="bg-gray-900 rounded-lg p-4 border border-gray-800 hover:border-purple-600 hover:bg-gray-800 cursor-pointer transition-all duration-200 flex items-center gap-4"
+        >
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-lg font-semibold text-white pr-2 truncate">{{ song.title }}</h3>
+              <button
+                @click.stop="deleteSong(song.id)"
+                class="text-gray-500 hover:text-red-500 transition-colors p-1 flex-shrink-0"
+                title="Delete song"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
+            <div class="flex items-center gap-4 flex-wrap">
+              <p class="text-sm text-gray-400">
+                <span class="font-medium">{{ song.stems.length }}</span> stem{{ song.stems.length !== 1 ? 's' : '' }}
+              </p>
+              <div class="flex flex-wrap gap-2">
+                <span
+                  v-for="stem in song.stems"
+                  :key="stem"
+                  class="px-2 py-1 text-xs bg-purple-900/50 text-purple-300 rounded"
+                >
+                  {{ stem }}
+                </span>
+              </div>
+              <p class="text-xs text-gray-500">
+                {{ formatDate(song.createdAt) }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useLibraryStore } from '../stores/libraryStore'
 import { usePlayerStore } from '../stores/playerStore'
 
@@ -83,6 +171,16 @@ const emit = defineEmits<{
 const libraryStore = useLibraryStore()
 const playerStore = usePlayerStore()
 const isLoading = libraryStore.isLoading
+
+// Layout state with localStorage persistence
+const layout = ref<'grid' | 'stacked'>(
+  (localStorage.getItem('songLibraryLayout') as 'grid' | 'stacked') || 'grid'
+)
+
+// Save layout preference to localStorage
+watch(layout, (newLayout) => {
+  localStorage.setItem('songLibraryLayout', newLayout)
+})
 
 onMounted(async () => {
   if (libraryStore.songs.length === 0) {
