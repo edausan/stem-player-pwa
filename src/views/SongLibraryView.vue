@@ -104,16 +104,28 @@
                 </span>
               </div>
             </div>
-            <button
-              v-if="authStore.isAuthenticated && (song.userId === authStore.user?.id || !song.userId)"
-              @click.stop="deleteSong(song.id)"
-              class="text-gray-500 hover:text-red-500 transition-colors p-1"
-              title="Delete song"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
+            <div class="flex items-center gap-1">
+              <button
+                v-if="authStore.isAuthenticated && (song.userId === authStore.user?.id || !song.userId)"
+                @click.stop="openEditModal(song)"
+                class="text-gray-500 hover:text-purple-400 transition-colors p-1"
+                title="Edit song"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              <button
+                v-if="authStore.isAuthenticated && (song.userId === authStore.user?.id || !song.userId)"
+                @click.stop="deleteSong(song.id)"
+                class="text-gray-500 hover:text-red-500 transition-colors p-1"
+                title="Delete song"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </div>
           </div>
           <div class="space-y-2">
             <p class="text-sm text-gray-400">
@@ -164,16 +176,28 @@
                   </span>
                 </div>
               </div>
-              <button
-                v-if="authStore.isAuthenticated && (song.userId === authStore.user?.id || !song.userId)"
-                @click.stop="deleteSong(song.id)"
-                class="text-gray-500 hover:text-red-500 transition-colors p-1 flex-shrink-0"
-                title="Delete song"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-              </button>
+              <div class="flex items-center gap-1 flex-shrink-0">
+                <button
+                  v-if="authStore.isAuthenticated && (song.userId === authStore.user?.id || !song.userId)"
+                  @click.stop="openEditModal(song)"
+                  class="text-gray-500 hover:text-purple-400 transition-colors p-1"
+                  title="Edit song"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                </button>
+                <button
+                  v-if="authStore.isAuthenticated && (song.userId === authStore.user?.id || !song.userId)"
+                  @click.stop="deleteSong(song.id)"
+                  class="text-gray-500 hover:text-red-500 transition-colors p-1"
+                  title="Delete song"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
             </div>
             <div class="flex items-center gap-4 flex-wrap">
               <p class="text-sm text-gray-400">
@@ -196,13 +220,21 @@
         </div>
       </div>
     </div>
+
+    <!-- Edit Song Modal -->
+    <EditSongModal
+      v-model="showEditModal"
+      :song="selectedSongForEdit"
+      @updated="handleSongUpdated"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { useLibraryStore } from '../stores/libraryStore'
+import { useLibraryStore, type SongMetadata } from '../stores/libraryStore'
 import { useAuthStore } from '../stores/authStore'
+import EditSongModal from '../components/EditSongModal.vue'
 
 const emit = defineEmits<{
   upload: []
@@ -213,6 +245,10 @@ const emit = defineEmits<{
 const libraryStore = useLibraryStore()
 const authStore = useAuthStore()
 const isLoading = libraryStore.isLoading
+
+// Edit modal state
+const showEditModal = ref(false)
+const selectedSongForEdit = ref<SongMetadata | null>(null)
 
 // Layout state with localStorage persistence
 const layout = ref<'grid' | 'stacked'>(
@@ -241,6 +277,16 @@ function formatDate(timestamp: number): string {
 
 async function selectSong(songId: string) {
   emit('select', songId)
+}
+
+function openEditModal(song: SongMetadata) {
+  selectedSongForEdit.value = song
+  showEditModal.value = true
+}
+
+function handleSongUpdated() {
+  // Song was updated, reload songs list
+  libraryStore.loadSongs()
 }
 
 async function deleteSong(songId: string) {

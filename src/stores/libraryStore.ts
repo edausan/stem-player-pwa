@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from './authStore'
 import { syncService } from '../services/syncService'
+import { separateStems, validateAudioFile, type SeparationProgress } from '../services/stemSeparationService'
 
 export interface SongMetadata {
   id: string
@@ -259,6 +260,73 @@ export const useLibraryStore = defineStore('library', () => {
     }
 
     return id
+  }
+
+  async function addSongWithSeparation(
+    title: string,
+    songFile: File,
+    isPublic: boolean = false,
+    onProgress?: (progress: SeparationProgress) => void
+  ): Promise<string> {
+    // Validate audio file
+    const validation = validateAudioFile(songFile)
+    if (!validation.valid) {
+      throw new Error(validation.error || 'Invalid audio file')
+    }
+
+    // Separate stems
+    const separatedStems = await separateStems(songFile, onProgress)
+
+    // Convert separated stems to the format expected by addSong
+    const files: Record<string, File> = {
+      drums: separatedStems.drums,
+      bass: separatedStems.bass,
+      vocals: separatedStems.vocals,
+      other: separatedStems.other
+    }
+
+    // Use existing addSong method to save
+    return await addSong(title, files, isPublic)
+  }
+
+  async function updateSong(
+    id: string,
+    updates: { title?: string; isPublic?: boolean }
+  ): Promise<void> {
+    // Get current song metadata
+    const currentSong = songs.value.find(s => s.id === id)
+    if (!currentSong) {
+      throw new Error('Song not found')
+    }
+
+    // Check if user owns the song (for authenticated users)
+    const authStore = useAuthStore()
+    if (authStore.isAuthenticated && currentSong.userId && currentSong.userId !== authStore.user?.id) {
+      throw new Error('You can only edit your own songs')
+    }
+
+    // Update song metadata
+    const updatedSong: SongMetadata = {
+      ...currentSong,
+      ...updates,
+      updatedAt: Date.now()
+    }
+
+    // Save locally first (offline-first)
+    await storage.saveMetadata(updatedSong)
+    await loadSongs()
+
+    // Queue for cloud sync if authenticated and online
+    if (authStore.isAuthenticated && navigator.onLine) {
+      syncService.queueOperation('upload', id)
+      // Try immediate sync (non-blocking)
+      syncService.processQueue().catch(err => {
+        console.error('Background sync error:', err)
+      })
+    } else if (authStore.isAuthenticated) {
+      // Queue for later when online
+      syncService.queueOperation('upload', id)
+    }
   }
 
   async function deleteSong(id: string) {
@@ -610,6 +678,8 @@ export const useLibraryStore = defineStore('library', () => {
     init,
     loadSongs,
     addSong,
+    addSongWithSeparation,
+    updateSong,
     deleteSong,
     getSong,
     uploadSongToCloud,

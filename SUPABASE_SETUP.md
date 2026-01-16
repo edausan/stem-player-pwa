@@ -1,6 +1,6 @@
 # Supabase Setup Guide
 
-This document outlines the required Supabase configuration for the Stem Player PWA.
+This document outlines the required Supabase configuration for the StemLab PWA.
 
 ## 1. Database Table Setup
 
@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS songs (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   stems TEXT[] NOT NULL,
+  is_public BOOLEAN DEFAULT FALSE NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS songs (
 -- Create index for faster queries
 CREATE INDEX IF NOT EXISTS idx_songs_user_id ON songs(user_id);
 CREATE INDEX IF NOT EXISTS idx_songs_updated_at ON songs(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_songs_is_public ON songs(is_public) WHERE is_public = TRUE;
 
 -- Enable Row Level Security
 ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
@@ -30,10 +32,13 @@ ALTER TABLE songs ENABLE ROW LEVEL SECURITY;
 ### Row Level Security (RLS) Policies
 
 ```sql
--- Policy: Users can only see their own songs
-CREATE POLICY "Users can view own songs"
+-- Policy: Users can view their own songs OR public songs
+CREATE POLICY "Users can view own or public songs"
   ON songs FOR SELECT
-  USING (auth.uid() = user_id);
+  USING (
+    auth.uid() = user_id OR 
+    is_public = TRUE
+  );
 
 -- Policy: Users can insert their own songs
 CREATE POLICY "Users can insert own songs"
@@ -51,6 +56,8 @@ CREATE POLICY "Users can delete own songs"
   ON songs FOR DELETE
   USING (auth.uid() = user_id);
 ```
+
+**Note:** Public songs are visible to everyone (including unauthenticated users), while private songs are only visible to their owners.
 
 ## 2. Storage Bucket Setup
 
@@ -106,6 +113,12 @@ CREATE POLICY "Users can read own files"
   );
 ```
 
+**Note:** For public songs to be accessible to guest users, you have two options:
+1. **Use signed URLs** (recommended): Generate signed URLs server-side for public songs
+2. **Create a public bucket**: Make a separate public bucket for public songs (requires additional setup)
+
+The current policy only allows authenticated users to read their own files. Public song file access requires additional implementation in your application code.
+
 **Policy 3: Users can update their own files**
 ```sql
 CREATE POLICY "Users can update own files"
@@ -128,6 +141,8 @@ CREATE POLICY "Users can delete own files"
 
 ## 3. Environment Variables
 
+### Local Development
+
 Create a `.env.local` file in your project root:
 
 ```env
@@ -139,6 +154,51 @@ You can find these values in:
 - Supabase Dashboard → Settings → API
 - URL: `Project URL`
 - Anon Key: `anon` `public` key (NOT the `service_role` key)
+
+### Vercel Deployment
+
+To add environment variables to Vercel:
+
+**Option 1: Via Vercel Dashboard (Recommended)**
+
+1. Go to your project in [Vercel Dashboard](https://vercel.com/dashboard)
+2. Navigate to **Settings** → **Environment Variables**
+3. Add each variable:
+   - **Name**: `VITE_SUPABASE_URL`
+   - **Value**: Your Supabase project URL
+   - **Environments**: Select Production, Preview, and Development
+   - Click **Save**
+   
+   Repeat for:
+   - **Name**: `VITE_SUPABASE_ANON_KEY`
+   - **Value**: Your Supabase anon key
+   - **Environments**: Select Production, Preview, and Development
+   - Click **Save**
+
+4. **Redeploy** your application for the changes to take effect:
+   - Go to **Deployments** tab
+   - Click the three dots (⋯) on the latest deployment
+   - Select **Redeploy**
+
+**Option 2: Via Vercel CLI**
+
+```bash
+# Install Vercel CLI if you haven't already
+npm i -g vercel
+
+# Add environment variables
+vercel env add VITE_SUPABASE_URL
+vercel env add VITE_SUPABASE_ANON_KEY
+
+# Pull environment variables to verify
+vercel env pull .env.local
+```
+
+**Important Notes:**
+- Environment variables prefixed with `VITE_` are exposed to the browser
+- The anon key is safe to expose (it's designed for client-side use)
+- Never commit your `.env.local` file to git (it's already in `.gitignore`)
+- After adding variables in Vercel, you must redeploy for them to take effect
 
 ## 4. File Structure in Storage
 
@@ -164,7 +224,21 @@ songs/
         others.mp3
 ```
 
-## 5. Authentication Setup
+## 5. Guest User Access (Public Songs)
+
+### Public Song Access
+
+Public songs can be accessed by anyone, including unauthenticated users. The RLS policies allow:
+- **Public songs**: Visible to everyone (authenticated and guest users)
+- **Private songs**: Only visible to the song owner
+
+### Storage Access for Public Songs
+
+For public songs to be accessible to guest users, you may need to add an additional storage policy that allows anonymous access to public song files. However, for security reasons, it's recommended to keep the storage bucket private and use signed URLs or a backend API to serve public song files.
+
+Alternatively, you can create a public bucket specifically for public songs, but this requires additional setup and management.
+
+## 6. Authentication Setup
 
 ### Email Authentication (Default)
 
@@ -185,7 +259,7 @@ To enable Google, GitHub, etc.:
 3. Configure OAuth credentials
 4. Update `AuthModal.vue` to include social login buttons
 
-## 6. Testing
+## 7. Testing
 
 ### Test RLS Policies
 
@@ -200,7 +274,7 @@ To enable Google, GitHub, etc.:
 2. Try to download another user's file - should fail
 3. Verify files are organized correctly in storage
 
-## 7. Database Functions (Optional)
+## 8. Database Functions (Optional)
 
 You can add a function to automatically update `updated_at`:
 
@@ -221,7 +295,7 @@ CREATE TRIGGER update_songs_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 ```
 
-## 8. Monitoring and Limits
+## 9. Monitoring and Limits
 
 ### Free Tier Limits
 - Database: 500 MB
@@ -232,7 +306,7 @@ CREATE TRIGGER update_songs_updated_at
 - Dashboard → Settings → Usage
 - Set up alerts for approaching limits
 
-## 9. Backup and Recovery
+## 10. Backup and Recovery
 
 ### Database Backups
 - Automatic daily backups on paid plans
