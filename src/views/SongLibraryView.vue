@@ -1,8 +1,8 @@
 <template>
   <div class="min-h-screen bg-black text-white">
     <div class="container mx-auto px-4 py-8 max-w-4xl">
-      <!-- Hero Section (when not logged in) -->
-      <div v-if="!authStore.isAuthenticated" class="text-center py-20">
+      <!-- Hero Section (when not logged in and no songs) -->
+      <div v-if="!authStore.isAuthenticated && !isLoading && libraryStore.songs.length === 0" class="text-center py-20">
         <div class="max-w-3xl mx-auto">
           <div class="mb-8">
             <svg class="w-32 h-32 mx-auto text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -32,14 +32,15 @@
         </div>
       </div>
 
-      <!-- Library Content (when logged in) -->
+      <!-- Library Content -->
       <div v-else>
         <div class="mb-6">
           <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4 gap-4">
             <h1 class="text-4xl font-bold flex-1">Song Library</h1>
             <div class="flex items-center gap-3">
-              <!-- Upload Button -->
+              <!-- Upload Button (only show when logged in) -->
               <button
+                v-if="authStore.isAuthenticated"
                 @click="$emit('upload')"
                 class="w-full md:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center justify-center gap-2"
               >
@@ -48,52 +49,97 @@
                 </svg>
                 Upload Song
               </button>
+              <!-- Sign In Button (when not logged in) -->
+              <button
+                v-else
+                @click="$emit('show-auth')"
+                class="w-full md:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center justify-center gap-2"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Sign In to Upload
+              </button>
             </div>
           </div>
 
-          <!-- View Options Toolbar -->
-          <div v-if="!isLoading && libraryStore.songs.length > 0" class="flex items-center justify-end gap-2 bg-gray-900 rounded-lg p-2 border border-gray-800">
-          <span class="text-sm text-gray-400 mr-2">View:</span>
-          <button
-            @click="layout = 'grid'"
-            :class="[
-              'px-3 py-2 rounded transition-colors duration-200',
-              layout === 'grid'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            ]"
-            title="Grid view"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-            </svg>
-          </button>
-          <button
-            @click="layout = 'stacked'"
-            :class="[
-              'px-3 py-2 rounded transition-colors duration-200',
-              layout === 'stacked'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
-            ]"
-            title="Stacked view"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-            </button>
+          <!-- Filter and View Options Toolbar -->
+          <div v-if="!isLoading && libraryStore.songs.length > 0" class="flex items-center justify-between gap-4 bg-gray-900 rounded-lg p-2 border border-gray-800">
+            <!-- Filter Buttons -->
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-400 mr-2">Filter:</span>
+              <button
+                @click="songFilter = 'all'"
+                :class="[
+                  'px-4 py-2 rounded transition-colors duration-200 text-sm font-medium',
+                  songFilter === 'all'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ]"
+              >
+                All Songs
+              </button>
+              <button
+                v-if="authStore.isAuthenticated"
+                @click="songFilter = 'my'"
+                :class="[
+                  'px-4 py-2 rounded transition-colors duration-200 text-sm font-medium',
+                  songFilter === 'my'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ]"
+              >
+                My Songs
+              </button>
+            </div>
+
+            <!-- View Options -->
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-gray-400 mr-2">View:</span>
+              <button
+                @click="layout = 'grid'"
+                :class="[
+                  'px-3 py-2 rounded transition-colors duration-200',
+                  layout === 'grid'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ]"
+                title="Grid view"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                </svg>
+              </button>
+              <button
+                @click="layout = 'stacked'"
+                :class="[
+                  'px-3 py-2 rounded transition-colors duration-200',
+                  layout === 'stacked'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                ]"
+                title="Stacked view"
+              >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
         <!-- Empty State -->
-        <div v-if="!isLoading && libraryStore.songs.length === 0" class="text-center py-16">
+        <div v-if="!isLoading && filteredSongs.length === 0" class="text-center py-16">
           <div class="mb-6">
             <svg class="w-24 h-24 mx-auto text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
             </svg>
           </div>
-          <p class="text-xl text-gray-400 mb-4">No songs in your library yet</p>
+          <p class="text-xl text-gray-400 mb-4">
+            {{ authStore.isAuthenticated ? 'No songs in your library yet' : 'No public songs available yet' }}
+          </p>
           <button
+            v-if="authStore.isAuthenticated"
             @click="$emit('upload')"
             class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center gap-2"
           >
@@ -101,6 +147,16 @@
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
             </svg>
             Upload Your First Song
+          </button>
+          <button
+            v-else
+            @click="$emit('show-auth')"
+            class="px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg transition-colors duration-200 inline-flex items-center gap-2"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+            </svg>
+            Sign In to Upload Songs
           </button>
         </div>
 
@@ -112,7 +168,7 @@
         <!-- Song List - Grid Layout -->
         <div v-else-if="layout === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
-          v-for="song in libraryStore.songs"
+          v-for="song in filteredSongs"
           :key="song.id"
           @click="selectSong(song.id)"
           class="bg-gray-900 rounded-lg p-6 border border-gray-800 hover:border-purple-600 hover:bg-gray-800 cursor-pointer transition-all duration-200"
@@ -197,7 +253,7 @@
         <!-- Song List - Stacked Layout -->
         <div v-else class="space-y-3">
         <div
-          v-for="song in libraryStore.songs"
+          v-for="song in filteredSongs"
           :key="song.id"
           @click="selectSong(song.id)"
           class="bg-gray-900 rounded-lg p-4 border border-gray-800 hover:border-purple-600 hover:bg-gray-800 cursor-pointer transition-all duration-200 flex items-center gap-4"
@@ -293,7 +349,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useLibraryStore, type SongMetadata } from '../stores/libraryStore'
 import { useAuthStore } from '../stores/authStore'
 import EditSongModal from '../components/EditSongModal.vue'
@@ -317,9 +373,23 @@ const layout = ref<'grid' | 'stacked'>(
   (localStorage.getItem('songLibraryLayout') as 'grid' | 'stacked') || 'grid'
 )
 
+// Filter state
+const songFilter = ref<'all' | 'my'>('all')
+
 // Save layout preference to localStorage
 watch(layout, (newLayout) => {
   localStorage.setItem('songLibraryLayout', newLayout)
+})
+
+// Computed filtered songs
+const filteredSongs = computed(() => {
+  if (songFilter.value === 'my') {
+    // Show only user's songs
+    return libraryStore.songs.filter(song => song.userId === authStore.user?.id)
+  } else {
+    // Show all songs (public + user's)
+    return libraryStore.songs
+  }
 })
 
 onMounted(async () => {
@@ -327,19 +397,20 @@ onMounted(async () => {
     await libraryStore.init()
   }
   
-  // If user is authenticated, load all songs (public + user's)
-  if (authStore.isAuthenticated && navigator.onLine) {
-    await libraryStore.loadAllSongs()
+  // Load songs (public songs are always available, user songs if authenticated)
+  if (navigator.onLine) {
+    await libraryStore.loadSongs()
   }
 })
 
 // Watch for auth changes and reload songs
 watch(() => authStore.isAuthenticated, async (isAuthenticated) => {
-  if (isAuthenticated && navigator.onLine) {
-    await libraryStore.loadAllSongs()
-  } else if (!isAuthenticated) {
-    // When logged out, clear the library
-    await libraryStore.clearLibrary()
+  if (navigator.onLine) {
+    await libraryStore.loadSongs()
+  }
+  // Reset filter to 'all' when logging out
+  if (!isAuthenticated) {
+    songFilter.value = 'all'
   }
 })
 

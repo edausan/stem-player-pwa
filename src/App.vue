@@ -78,11 +78,11 @@
               >
                 <button
                   @click="handleSync"
-                  :disabled="libraryStore.isSyncing"
+                  :disabled="libraryStore.isLoading"
                   class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <svg
-                    v-if="libraryStore.isSyncing"
+                    v-if="libraryStore.isLoading"
                     class="w-4 h-4 animate-spin"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -99,7 +99,7 @@
                   >
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
-                  <span>{{ libraryStore.isSyncing ? 'Syncing...' : 'Sync' }}</span>
+                  <span>{{ libraryStore.isLoading ? 'Loading...' : 'Refresh' }}</span>
                 </button>
                 <div class="border-t border-gray-700 my-1"></div>
                 <button
@@ -174,7 +174,6 @@ import PlayerView from './views/PlayerView.vue'
 import AuthModal from './components/AuthModal.vue'
 import { useAuthStore } from './stores/authStore'
 import { useLibraryStore } from './stores/libraryStore'
-import { syncService } from './services/syncService'
 
 const authStore = useAuthStore()
 const libraryStore = useLibraryStore()
@@ -204,11 +203,6 @@ function handleSongLoaded() {
 async function handleAuthenticated() {
   // User just authenticated, load all songs (public + user's)
   await libraryStore.loadAllSongs()
-  if (navigator.onLine) {
-    syncService.fullSync().catch(err => {
-      console.error('Sync error after auth:', err)
-    })
-  }
 }
 
 async function handleSync() {
@@ -221,7 +215,6 @@ async function handleSync() {
   showUserMenu.value = false
   
   if (navigator.onLine) {
-    await syncService.fullSync()
     await libraryStore.loadSongs()
   }
 }
@@ -240,16 +233,11 @@ onMounted(async () => {
   // Initialize library
   await libraryStore.init()
 
-  // Start auto-sync if authenticated and online
-  if (authStore.isAuthenticated && navigator.onLine) {
-    syncService.startAutoSync(60000) // Sync every minute
-  }
-
-  // Listen for online/offline events
+  // Reload songs when coming online
   window.addEventListener('online', () => {
     if (authStore.isAuthenticated) {
-      syncService.fullSync().catch(err => {
-        console.error('Sync error when coming online:', err)
+      libraryStore.loadSongs().catch(err => {
+        console.error('Error loading songs when coming online:', err)
       })
     }
   })
